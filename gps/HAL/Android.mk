@@ -64,5 +64,5 @@ LOCAL_MODULE := gps.default
 LOCAL_MODULE_TAGS := optional
 
 include $(BUILD_SHARED_LIBRARY)
-#include $(LOCAL_PATH)/libs/Android.mk
+include $(LOCAL_PATH)/libs/Android.mk
 endif

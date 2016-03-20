@@ -68,13 +68,13 @@
 
 #define EPO_FILE "/data/misc/EPO.DAT"
 #define EPO_FILE_HAL "/data/misc/EPOHAL.DAT"
-#define LOCATION_NLP_FIX "/data/misc/LOCATION.DAT"
+//#define EPO_FILE_HAL_TEMP "/data/misc/EPOHALTEMP.DAT"
 #define MTK_EPO_SET_PER_DAY  4
 #define MTK_EPO_MAX_DAY      30
 #define MTK_EPO_ONE_SV_SIZE  72
 #define MTK_EPO_SET_MAX_SIZE 2304  //72*32, One SET
 #define MTK_EPO_MAX_SET (MTK_EPO_MAX_DAY * MTK_EPO_SET_PER_DAY)
-#define MTK_EPO_EXPIRED 3*24*60*60 //7 days(s)
+#define MTK_EPO_EXPIRED 7*24*60*60 //7 days(s)
 #define BUF_SIZE MTK_EPO_SET_MAX_SIZE
 #define GPS_CONF_FILE_SIZE 100
 #define EPO_CONTROL_FILE_PATH "/data/misc/gps.conf"
@@ -137,109 +137,15 @@ typedef struct {
     AGpsRilCallbacks* agps_ril_callbacks;
 } agps_context;
 
-typedef  unsigned int             UINT4;
-typedef  signed int               INT4;
-
-typedef unsigned char           UINT8;
-typedef signed char             INT8;
-
-typedef unsigned short int      UINT16;
-typedef signed short int        INT16;
-
-typedef unsigned int            UINT32;
-typedef signed int              INT32;
-
-typedef signed long long       INT64;
-
-#pragma pack(4) // Align by 4 byte
-typedef struct
-{
-   UINT32 size;
-   UINT32 flag;
-   INT8 PRN;
-   double TimeOffsetInNs;
-   UINT16 state;
-   INT64 ReGpsTowInNs;                    //Re: Received
-   INT64 ReGpsTowUnInNs;               //Re: Received, Un:Uncertainty
-   double Cn0InDbHz;
-   double PRRateInMeterPreSec;       // PR: Pseuderange
-   double PRRateUnInMeterPreSec;   // PR: Pseuderange Un:Uncertainty
-   UINT16 AcDRState10;                      // Ac:Accumulated, DR:Delta Range
-   double AcDRInMeters;                    // Ac:Accumulated, DR:Delta Range
-   double AcDRUnInMeters;                // Ac:Accumulated, DR:Delta Range, Un:Uncertainty
-   double PRInMeters;                        // PR: Pseuderange
-   double PRUnInMeters; 
-   double CPInChips;                          // CP: Code Phase
-   double CPUnInChips;                      // CP: Code Phase
-   float CFInhZ;                                  // CP: Carrier Frequency
-   INT64 CarrierCycle;
-   double CarrierPhase;
-   double CarrierPhaseUn;                 // Un:Uncertainty
-   UINT8 LossOfLock;
-   INT32 BitNumber;
-   INT16 TimeFromLastBitInMs;
-   double DopperShiftInHz;
-   double DopperShiftUnInHz;           // Un:Uncertainty
-   UINT8 MultipathIndicater;
-   double SnrInDb;
-   double ElInDeg;                             // El: elevation
-   double ElUnInDeg;                         // El: elevation, Un:Uncertainty
-   double AzInDeg;                            // Az: Azimuth
-   double AzUnInDeg;                        // Az: Azimuth
-   char UsedInFix;
-}MTK_GPS_MEASUREMENT;
-
-typedef struct
-{
-   UINT32 size;
-   UINT16 flag;
-   INT16 leapsecond;
-   UINT8 type;
-   INT64 TimeInNs; 
-   double TimeUncertaintyInNs;
-   INT64 FullBiasInNs;
-   double BiasInNs;
-   double BiasUncertaintyInNs;
-   double DriftInNsPerSec;
-   double DriftUncertaintyInNsPerSec;
-}MTK_GPS_CLOCK;
-typedef struct
-{
-   UINT32 size;
-   INT8 type;
-   UINT8 prn;  
-   INT16 messageID;
-   INT16 submessageID;
-   UINT32 length;
-   UINT8 data[40]; 
-} MTK_GPS_NAVIGATION_EVENT;
-#pragma pack()
-typedef struct{
-    GpsUtcTime time;
-    int64_t timeReference;
-    int uncertainty;
-} ntp_context;
-
-typedef struct{
-    double latitude;
-    double longitude;
-    float accuracy;
-    struct timespec ts;
-    unsigned char  type;
-    unsigned char  started; 
-} nlp_context;
-
-
 agps_context g_agps_ctx;
 
 #if EPO_SUPPORT
 #define  GPS_EPO_FILE_LEN  20
 #define C_INVALID_TIMER -1  /*invalid timer */
-static int gps_epo_period = 3;
-static int wifi_epo_period = 1;
-static int gps_epo_download_days = 30;
+static int gps_epo_period = 7;
+static int gps_epo_download_days = 7;
 static int gps_epo_enable = 1;
-static int gps_epo_wifi_trigger = 0;
+static int gps_epo_wifi_trigger = 1;
 static int gps_epo_file_count = 0;
 static char gps_epo_file_name[GPS_EPO_FILE_LEN] = {0};
 static char gps_epo_md_file_name[GPS_EPO_FILE_LEN] = {0};
@@ -303,12 +209,6 @@ enum {
     HAL_CMD_MNL_DIE = 0x41,
     HAL_CMD_GPS_ICON = 0x42,
     
-    MNL_CMD_GPS_INJECT_TIME = 0x46,
-    MNL_CMD_GPS_INJECT_LOCATION = 0x47,
-    MNL_CMD_GPS_INJECT_TIME_REQ = 0x48,
-    MNL_CMD_GPS_INJECT_LOCATION_REQ = 0x49,
-
-    MNL_CMD_GPS_NLP_LOCATION_REQ = 0x4a,
     HAL_CMD_MEASUREMENT= 0x76,
     HAL_CMD_NAVIGATION= 0x77,  
     HAL_CMD_SWITCH_AGPS_DEBUG_DONE = 0x44,
@@ -405,11 +305,6 @@ typedef enum{
 }SV_TYPE;
 static float report_time_interval = 0;
 static int started = 0;
-static int nw_connected = 0;
-static int nw_type = 0;
-#define nw_wifi 0x00000001
-#define nw_data 0x00000000
-
 #if EPO_SUPPORT
 //zqh: download EPO by request
 static GpsXtraCallbacks mGpsXtraCallbacks;
@@ -419,32 +314,19 @@ typedef struct
     char* data;
 }EpoData;
 EpoData epo_data;
+static int nw_connected = 0;
+static int nw_type = 0;
 static int epo_download_failed = 0;
 static int epo_download_retry = 1;
 char chip_id[PROPERTY_VALUE_MAX];
 
+#define nw_wifi 0x00000001
+#define nw_data 0x00000000
 #endif
 /*---------------------------------------------------------------------------*/
 typedef struct {
     int sock;
 } MTK_GPS;
-static void measurement_callback(GpsData* data) {
-	DBG("measurement_callback is called");
-}
-
-GpsMeasurementCallbacks sGpsMeasurementCallbacks = {
-    sizeof(GpsMeasurementCallbacks),
-    measurement_callback,
-};
-
-static void navigation_message_callback(GpsNavigationMessage* message) {
-	DBG("navigation_message_callback is called");
-}
-
-GpsNavigationMessageCallbacks sGpsNavigationMessageCallbacks = {
-    sizeof(GpsNavigationMessageCallbacks),
-    navigation_message_callback,
-};
 /*****************************************************************************/
 
 /*****************************************************************/
@@ -476,6 +358,7 @@ struct sockaddr_un cmd_local;
 struct sockaddr_un remote;
 socklen_t remotelen;
 
+typedef unsigned short int UINT16;
 
 /*****************************************************************************/
 /*AT command test state*/
@@ -538,7 +421,6 @@ int test_mode_flag = 1; //0: USB mode, 1: SMS mode
 #endif
 static int gpsmeasurement_init_flag = 0; /*1:init,0:close*/
 static int gpsnavigation_init_flag = 0; /*1:init,0:close*/
-int sv_used_in_fix[256] = {0};    // for multiple sv display
 static int get_prop()
 {
     //Read property
@@ -687,55 +569,6 @@ int mtk_daemon_send(int sockfd, void* dest, char* buf, int size) {
     //unlink(soc_addr.sun_path);
     return ret;
 }
-static void mtk_gps_update_location(nlp_context * location)
-{
-    FILE *fp = NULL;
-
-    fp = fopen(LOCATION_NLP_FIX,"w");
-    if(fp != NULL)
-    {   
-        size_t count = 0;
-        count = fwrite(location, sizeof(nlp_context), 1, fp);
-        if(count != 1)
-        {
-            DBG("write count:%d,errno:%s\n", count,strerror(errno));
-        }
-        fclose(fp);
-    }
-}
-
-static void mtk_gps_send_location_to_mnl(void)
-{
-    FILE *fp = NULL;    
-
-    fp = fopen(LOCATION_NLP_FIX,"r");  
-    if(fp != NULL)
-    {
-        nlp_context nlp_location;
-        char buff[1024] = {0};
-        int offset = 0;
-        size_t count = 0;
-        memset(&nlp_location,0,sizeof(nlp_context));
-        count = fread(&nlp_location,sizeof(nlp_context),1,fp);
-        if(count != 1)
-        {
-            DBG("read count:%d,errno:%s\n",count,strerror(errno));
-        }
-        nlp_location.started = started;
-        buff_put_int(MNL_CMD_GPS_INJECT_LOCATION, buff, &offset);
-        buff_put_struct(&nlp_location, sizeof(nlp_context), buff, &offset);
-        if(g_agps_ctx.send_fd >= 0)
-        {
-            int res = mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
-            DBG("send location to mnl successfully\n");
-        }
-        else
-        {
-            ERR("g_agps_ctx.send_fd is not initialized\n");
-        } 
-        fclose(fp);
-    }
-}
 
 void buff_put_int(int input, char* buff, int* offset) {
     *((int*)&buff[*offset]) = input;
@@ -874,7 +707,7 @@ int agps_data_conn_failed() {
     buff_put_int(AGPS_FRAMEWORK_INFO_DATA_CONN_FAILED, buff, &offset);
 
     mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
-		return 0;
+	return 0;
 }
 int agps_set_server(AGpsType type, const char* hostname, int port) {
     char buff[1024] = {0};
@@ -886,8 +719,8 @@ int agps_set_server(AGpsType type, const char* hostname, int port) {
     buff_put_string(hostname, buff, &offset);
     buff_put_int(port, buff, &offset);
 
-    int res = mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
-    return res;
+    mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
+    return 0;
 }
 static const AGpsInterface mtkAGpsInterface = {
     sizeof(AGpsInterface),
@@ -973,7 +806,7 @@ void agps_ril_set_ref_location(const AGpsRefLocation *agps_reflocation, size_t s
 void agps_ril_set_set_id(AGpsSetIDType type, const char* setid) {
     char buff[1024] = {0};
     int offset = 0;
-    //DBG("agps_ril_set_set_id  type=%d setid=[%s]\n", type, setid);
+    DBG("agps_ril_set_set_id  type=%d setid=[%s]\n", type, setid);
     
     buff_put_int(AGPS_FRAMEWORK_INFO_SET_SET_ID, buff, &offset);
     buff_put_int(type, buff, &offset);
@@ -991,29 +824,15 @@ void agps_ril_ni_message(uint8_t *msg, size_t len) {
 
     mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
 }
-void agps_network_connected_wifi_tragger_nlp(void)
-{
-    char buff[1024] = {0};
-    int offset = 0;
-
-    TRC();    
-    buff_put_int(MNL_CMD_GPS_NLP_LOCATION_REQ, buff, &offset);
-    mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff)); 
-
-}
 void agps_ril_update_network_state(int connected, int type, int roaming, const char* extra_info) {
     char buff[1024] = {0};
     int offset = 0;
     DBG("agps_ril_update_network_state  connected=%d type=%d roaming=%d extra=%s\n", 
         connected, type, roaming, extra_info);
-    DBG("nw_connected =%d\n",nw_connected);
-    if(nw_connected == 0 && connected == 1 && type == nw_wifi)
-    {
-        /*send nlp request to mnld */
-        agps_network_connected_wifi_tragger_nlp();
-    }
+#if EPO_SUPPORT
 	nw_connected = connected;
 	nw_type = type;
+#endif
     buff_put_int(AGPS_FRAMEWORK_INFO_UPDATE_NETWORK_STATE, buff, &offset);
     buff_put_int(connected, buff, &offset);
     buff_put_int(type, buff, &offset);
@@ -1451,7 +1270,7 @@ typedef struct {
      */
     int     cb_status_changed;  
     int     sv_count;           /*used to count the number of received SV information*/    
-    GnssSvStatus  sv_status;  
+    GpsSvStatus  sv_status;  
     GpsCallbacks callbacks;
 #ifdef GPS_AT_COMMAND
 //    GpsTestResult test_result;
@@ -1494,7 +1313,7 @@ nmea_reader_init( NmeaReader* const r )
     r->utc_diff = 0;
     r->callbacks.location_cb= NULL;
     r->callbacks.status_cb= NULL;
-    r->callbacks.gnss_sv_status_cb= NULL;  
+    r->callbacks.sv_status_cb= NULL;  
     r->sv_count = 0;
     r->fix_mode = 0;    /*no fix*/
     r->cb_status_changed = 0;
@@ -1951,29 +1770,23 @@ nmea_reader_update_sv_status( NmeaReader* r, int sv_index,
 {   
     //int prn = str2int(id.p, id.end);
     int prn = id;    
-
-    if ((prn <= 0) || (prn < 65 && prn > GPS_MAX_SVS)|| ((prn > 96) && (prn < 200)) || (prn > 232) || (r->sv_count >= GNSS_MAX_SVS)) {
+    if ((prn <= 0) || (prn < 65 && prn > GPS_MAX_SVS)|| (prn > 96) || (r->sv_count >= GPS_MAX_SVS)) {
         VER("sv_status: ignore (%d)", prn);
         return 0;
     }
     sv_index = r->sv_count+r->sv_status.num_svs;
-	if(GNSS_MAX_SVS <= sv_index)
+	if(GPS_MAX_SVS <= sv_index)
 	{
-        ERR("ERR: sv_index=[%d] is larger than GNSS_MAX_SVS.\n", sv_index);
+        ERR("ERR: sv_index=[%d] is larger than GPS_MAX_SVS.\n", sv_index);
 		return 0;
 	}
     r->sv_status.sv_list[sv_index].prn = prn;
     r->sv_status.sv_list[sv_index].snr = str2float(snr.p, snr.end);
     r->sv_status.sv_list[sv_index].elevation = str2int(elevation.p, elevation.end);
     r->sv_status.sv_list[sv_index].azimuth = str2int(azimuth.p, azimuth.end);
-	if(1 == sv_used_in_fix[prn]){
-		r->sv_status.sv_list[sv_index].used_in_fix = true;
-	}else{
-		r->sv_status.sv_list[sv_index].used_in_fix = false;
-	}
     r->sv_count++;
-    VER("sv_status(%2d): %2d, %2f, %3f, %2f, %2d", sv_index, r->sv_status.sv_list[sv_index].prn, r->sv_status.sv_list[sv_index].elevation,
-                                         r->sv_status.sv_list[sv_index].azimuth, r->sv_status.sv_list[sv_index].snr,r->sv_status.sv_list[sv_index].used_in_fix);        
+    VER("sv_status(%2d): %2d, %2f, %3f, %2f", sv_index, r->sv_status.sv_list[sv_index].prn, r->sv_status.sv_list[sv_index].elevation,
+                                         r->sv_status.sv_list[sv_index].azimuth, r->sv_status.sv_list[sv_index].snr);        
     return 0;
 }
 
@@ -2109,12 +1922,12 @@ nmea_reader_parse( NmeaReader* const r )
                                       tok_longitudeHemi.p[0]);
         nmea_reader_update_altitude(r, tok_altitude, tok_altitudeUnits);
 
-    } else if ( !memcmp(mtok.p, "GPGSA", 5)||!memcmp(mtok.p, "BDGSA", 5)||!memcmp(mtok.p, "GLGSA", 5)) {
+    } else if ( !memcmp(mtok.p, "GPGSA", 5) ) {
         Token tok_fix = nmea_tokenizer_get(tzer, 2);    
         int idx, max = 12; /*the number of satellites in GPGSA*/
 	
         r->fix_mode = str2int(tok_fix.p, tok_fix.end);   
-
+        r->sv_status.used_in_fix_mask = 0;
         if (LOC_FIXED(r)) { /* 1: No fix; 2: 2D; 3: 3D*/
             for (idx = 0; idx < max; idx++) {
                 Token tok_satellite = nmea_tokenizer_get(tzer, idx+3);
@@ -2123,26 +1936,22 @@ nmea_reader_parse( NmeaReader* const r )
                     break;
                 }
                 int sate_id = str2int(tok_satellite.p, tok_satellite.end);
-				if (sv_type == BDS_SV){				
-                	sate_id += 200;
-            	}					
-                if (sate_id >= 1 && sate_id <= 32) {  //GP
-					sv_used_in_fix[sate_id] = 1;                   
-                }else if(sate_id >= 193 && sate_id <= 197){	
-                	sv_used_in_fix[sate_id] = 0; 
-                    DBG("[debug mask]QZSS,just ignore. satellite id is %d\n ", sate_id);
-                    continue;
-                }else if(sate_id >= 65 && sate_id <= 96){  //GL
-               		sv_used_in_fix[sate_id] = 1; 
-                }else if(sate_id >= 201 && sate_id <= 232){  //BD
-               		sv_used_in_fix[sate_id] = 1; 
-					
-                }
-				else{					
-                    VER("GSA: invalid sentence, ignore!!");
-                    break;
-                } 
-				DBG("GSA:sv_used_in_fix[%d] = %d\n",sate_id,sv_used_in_fix[sate_id]);
+                if (sate_id >= 1 && sate_id <= 32) {
+                    r->sv_status.used_in_fix_mask |= ( 1 << (sate_id-1) );
+                } else {
+	                    if(sate_id >= 193 && sate_id <= 197)
+			            {
+	                        DBG("[debug mask]QZSS,just ignore. satellite id is %d\n ", sate_id);
+	                        continue;
+	                    }/*
+			                    else
+			                    {
+			                        r->sv_status.used_in_fix_mask = 0;
+			                        DBG("[debug mask] satellite is invalid & mask = %d\n ", r->sv_status.used_in_fix_mask);
+			                    }*/
+	                    VER("GPGSA: invalid sentence, ignore!!");
+	                    break;
+                }                   
             }
         }
     }
@@ -2171,7 +1980,7 @@ nmea_reader_parse( NmeaReader* const r )
             nmea_reader_update_bearing( r, tok_bearing );
             nmea_reader_update_speed  ( r, tok_speed );
         }
-    } else if ( !memcmp(tok.p, "GSV", 3) ) {
+    } else if ( !memcmp(mtok.p, "GPGSV", 5)||!memcmp(mtok.p, "GLGSV", 5) ) {
         Token tok_num = nmea_tokenizer_get(tzer,1); //number of messages
         Token tok_seq = nmea_tokenizer_get(tzer,2); //sequence number
         Token tok_cnt = nmea_tokenizer_get(tzer,3); //Satellites in view
@@ -2204,10 +2013,9 @@ nmea_reader_parse( NmeaReader* const r )
         }
         if (seq == num) {
             if (r->sv_count <= cnt) { 
-				DBG("r->sv_count = %d",r->sv_count);
                 r->sv_status.num_svs += r->sv_count;
-  
-         
+                r->sv_status.almanac_mask = 0;
+                r->sv_status.ephemeris_mask = 0;
 #ifdef GPS_AT_COMMAND
                 if ((1 == MNL_AT_TEST_FLAG) || (1 == MNL_AT_SIGNAL_MODE)){ 				 
 	               	DBG("MNL_AT_TEST_FLAG = %d, MNL_AT_SIGNAL_MODE = %d", MNL_AT_TEST_FLAG, MNL_AT_SIGNAL_MODE);
@@ -2223,6 +2031,7 @@ nmea_reader_parse( NmeaReader* const r )
     //Add for Accuracy
     else if ( !memcmp(tok.p, "ACCURACY", 8)) {
         if((r->fix_mode == 3)||(r->fix_mode == 2)) {
+        //if(LOC_FIXED(r)) {
         Token  tok_accuracy = nmea_tokenizer_get(tzer,1);
         nmea_reader_update_accuracy(r, tok_accuracy);
             DBG("GPS get accuracy from driver:%f\n", r->fix.accuracy);
@@ -2277,17 +2086,6 @@ nmea_reader_parse( NmeaReader* const r )
         mtk_daemon_send(mtk_gps.sock, MTK_HAL2MNLD, buff, sizeof(buff));            
     }
     callback_backup.location_cb(&r->fix);
-    {
-        nlp_context fix_location;
-        fix_location.latitude = r->fix.latitude;
-        fix_location.longitude= r->fix.longitude;
-        fix_location.accuracy= r->fix.accuracy;
-        fix_location.type = 1;
-        fix_location.started = started;    
-        fix_location.ts.tv_sec = r->fix.timestamp/1000;
-        fix_location.ts.tv_nsec = (r->fix.timestamp%1000) * 1000*1000;
-        mtk_gps_update_location(&fix_location);
-    }
     r->fix.flags = 0;
     }
 	
@@ -2295,10 +2093,19 @@ nmea_reader_parse( NmeaReader* const r )
     if (r->sv_status.num_svs != 0 && gps_nmea_end_tag) 
     {
         int idx;
-		r->sv_status.size = sizeof(GnssSvStatus);
-		callback_backup.gnss_sv_status_cb(&r->sv_status);
-		r->sv_count = r->sv_status.num_svs = 0;
-		memset(sv_used_in_fix,0,256*sizeof(int));
+        for (idx = 0; idx < r->sv_status.num_svs; idx++) {
+            int prn = r->sv_status.sv_list[idx].prn;
+            if (prn < 1 || ((prn > 32) && (prn < 65))|| prn > 96) {
+                ERR("Satellite invalid id: %d", prn);
+            } else {
+                DBG("Satellite (%2d) = %2f, %3f, %2f", r->sv_status.sv_list[idx].prn, 
+                                                   r->sv_status.sv_list[idx].elevation, r->sv_status.sv_list[idx].azimuth,
+                                                   r->sv_status.sv_list[idx].snr);
+            }
+            callback_backup.sv_status_cb(&r->sv_status);
+            r->sv_count = r->sv_status.num_svs = 0;
+            r->sv_status.used_in_fix_mask = 0;
+        } 
     }
 }
 
@@ -2516,25 +2323,16 @@ gps_download_epo_enable(void)
 			gps_epo_download_days = str2int(val,val+len);      //*val-'0';
 			if(gps_epo_download_days > 30 || gps_epo_download_days < 0 )
 			{
-				gps_epo_download_days = 30;
+				gps_epo_download_days = 7;
 			}
 		}
-		if(!strcmp(key, "GPS_EPO_PERIOD"))
+		if(!strcmp(key, "EPO_PERIOD"))
 		{
 			int len = strlen(val)-1;
 			gps_epo_period = str2int(val,val+len);      //*val-'0';
 			if((gps_epo_period != 30) && (gps_epo_period != 3) && (gps_epo_period != 15))
 			{
-				gps_epo_period = 3;
-			}
-		}
-		if(!strcmp(key, "WIFI_EPO_PERIOD"))
-		{
-			int len = strlen(val)-1;
-			wifi_epo_period = str2int(val,val+len);      //*val-'0';
-			if((wifi_epo_period != 30) && (wifi_epo_period != 3) && (wifi_epo_period != 15))
-			{
-				wifi_epo_period = 1;
+				gps_epo_period = 7;
 			}
 		}
 		if(!strcmp(key, "EPO_WIFI_TRIGGER"))
@@ -2548,8 +2346,8 @@ gps_download_epo_enable(void)
 			}
 			DBG("gps_epo_wifi_triggerend = %d\n",gps_epo_wifi_trigger);
 		}
-		DBG("gps_epo_enable = %d,gps_epo_period=%d,wifi_epo_period=%d,gps_epo_wifi_trigger=%d\n",gps_epo_enable,gps_epo_period,
-			wifi_epo_period,gps_epo_wifi_trigger);
+		DBG("gps_epo_enable = %d,gps_epo_period=%d,gps_epo_wifi_trigger=%d\n",gps_epo_enable,gps_epo_period,
+			gps_epo_wifi_trigger);
 	}
 	fclose(fp);
 	return gps_epo_enable;
@@ -3340,34 +3138,28 @@ void mnld_to_gps_handler(int fd,GpsState* s) {//from AGPSD->MNLD->HAL->FWK
 
             buff_get_struct((char *)&location, sizeof(mnl_agps_agps_location), buff, &offset);
 
-            DBG("latitude = %lf, longitude= %lf, altitude_used = %d, altitude = %lf, accuracy = %d",location.latitude,
-                location.longitude, location.altitude_used, location.altitude, location.accuracy_used);
+            DBG("latitude = %lf, longitude= %lf, altitude_used = %s, altitude = %lf",location.latitude,
+                location.longitude, &location.altitude_used, location.altitude);
 
             mlocation.flags    |= GPS_LOCATION_HAS_LAT_LONG;
             mlocation.latitude  = location.latitude;
             mlocation.longitude = location.longitude;
 
-            if (location.altitude_used){
+            if (strcmp(&location.altitude_used, "1") == 0){
                 mlocation.flags |= GPS_LOCATION_HAS_ALTITUDE;
                 mlocation.altitude = location.altitude;
             }
 
-            if(location.speed_used) {
-                mlocation.flags |= GPS_LOCATION_HAS_SPEED;
+            if(strcmp(&location.speed_used, "1") == 0)
                 mlocation.speed = location.speed;
-            }
 
-            if(location.bearing_used) {
-                mlocation.flags |= GPS_LOCATION_HAS_BEARING;
+            if(strcmp(&location.bearing_used, "1") == 0)
                 mlocation.bearing = location.bearing;
-            }
 
-            if(location.accuracy_used) {
-                mlocation.flags |= GPS_LOCATION_HAS_ACCURACY;
+            if(strcmp(&location.accuracy_used, "1") == 0)
                 mlocation.accuracy = location.accuracy;
-            }
 
-            if(location.timestamp_used)
+            if(strcmp(&location.timestamp_used, "1") == 0)
                 mlocation.timestamp = location.timestamp;
 
             mlocation.size = sizeof(GpsLocation);
@@ -3395,21 +3187,6 @@ void mnld_to_gps_handler(int fd,GpsState* s) {//from AGPSD->MNLD->HAL->FWK
             break;
         }
 #endif
-        case MNL_CMD_GPS_INJECT_TIME_REQ:{
-            if(callback_backup.request_utc_time_cb)
-            {
-                DBG("request_utc_time_cb\n");
-                callback_backup.request_utc_time_cb();
-            }
-            break;
-        }
-        case MNL_CMD_GPS_INJECT_LOCATION_REQ:{
-            DBG("mnl request location\n");
-            {
-                mtk_gps_send_location_to_mnl();
-            }
-            break;
-        }
         case HAL_CMD_MNL_DIE:{
             DBG("MNLD died!!");
 		    flag_unlock = 0;	
@@ -3454,133 +3231,25 @@ void mnld_to_gps_handler(int fd,GpsState* s) {//from AGPSD->MNLD->HAL->FWK
 		case HAL_CMD_MEASUREMENT:{
 			DBG("HAL_CMD_MEASUREMENT message recieved\n");
 			if(gpsmeasurement_init_flag == 1){
-			int i = 0;	
-        	MTK_GPS_MEASUREMENT mtk_gps_measurement[32];
-	        buff_get_struct(mtk_gps_measurement, 32*sizeof(MTK_GPS_MEASUREMENT), buff, &offset); 
-			MTK_GPS_CLOCK mtk_gps_clock;
-			buff_get_struct(&mtk_gps_clock, sizeof(MTK_GPS_CLOCK), buff, &offset);
-			GpsClock gpsclock;
-			memset(&gpsclock, 0, sizeof(GpsClock));
-			gpsclock.size = sizeof(GpsClock);
-			gpsclock.bias_ns = mtk_gps_clock.BiasInNs;
-			gpsclock.bias_uncertainty_ns = mtk_gps_clock.BiasUncertaintyInNs;
-			gpsclock.drift_nsps = mtk_gps_clock.DriftInNsPerSec;
-			gpsclock.flags = mtk_gps_clock.flag;			
-			gpsclock.leap_second = mtk_gps_clock.leapsecond;
-			gpsclock.time_ns = mtk_gps_clock.TimeInNs;
-			gpsclock.time_uncertainty_ns = mtk_gps_clock.TimeUncertaintyInNs;
-			gpsclock.type = mtk_gps_clock.type;
-			gpsclock.full_bias_ns = mtk_gps_clock.FullBiasInNs;
-			gpsclock.drift_uncertainty_nsps = mtk_gps_clock.DriftUncertaintyInNsPerSec;
-			
 			GpsData gpsdata;
             memset(&gpsdata, 0, sizeof(GpsData));          
-			gpsdata.size = sizeof(GpsData);
+            buff_get_struct(&gpsdata, sizeof(GpsData), buff, &offset);
 			
-			for(i = 0;i < 1;i++)
-			{ 
-				DBG("gpsdata measurements[%d] memcpy completed",i);
-				gpsdata.measurements[i].size = sizeof(GpsMeasurement);
-				gpsdata.measurements[i].accumulated_delta_range_m = mtk_gps_measurement[i].AcDRInMeters;
-				gpsdata.measurements[i].accumulated_delta_range_state = mtk_gps_measurement[i].AcDRState10;
-				gpsdata.measurements[i].accumulated_delta_range_uncertainty_m = mtk_gps_measurement[i].AcDRUnInMeters;
-				gpsdata.measurements[i].azimuth_deg = mtk_gps_measurement[i].AzInDeg;
-				gpsdata.measurements[i].azimuth_uncertainty_deg = mtk_gps_measurement[i].AzUnInDeg;
-				gpsdata.measurements[i].bit_number = mtk_gps_measurement[i].BitNumber;
-				gpsdata.measurements[i].carrier_cycles = mtk_gps_measurement[i].CarrierCycle; 
-				gpsdata.measurements[i].carrier_phase = mtk_gps_measurement[i].CarrierPhase;
-				gpsdata.measurements[i].carrier_phase_uncertainty = mtk_gps_measurement[i].CarrierPhaseUn;
-				gpsdata.measurements[i].carrier_frequency_hz= mtk_gps_measurement[i].CFInhZ;
-				gpsdata.measurements[i].c_n0_dbhz = mtk_gps_measurement[i].Cn0InDbHz;
-				gpsdata.measurements[i].code_phase_chips = mtk_gps_measurement[i].CPInChips;
-				gpsdata.measurements[i].code_phase_uncertainty_chips = mtk_gps_measurement[i].CPUnInChips;
-				gpsdata.measurements[i].doppler_shift_hz= mtk_gps_measurement[i].DopperShiftInHz;
-				gpsdata.measurements[i].doppler_shift_uncertainty_hz = mtk_gps_measurement[i].DopperShiftUnInHz;
-				gpsdata.measurements[i].elevation_deg = mtk_gps_measurement[i].ElInDeg;
-				gpsdata.measurements[i].elevation_uncertainty_deg = mtk_gps_measurement[i].ElUnInDeg;
-				gpsdata.measurements[i].flags = mtk_gps_measurement[i].flag;
-				gpsdata.measurements[i].loss_of_lock = mtk_gps_measurement[i].LossOfLock;
-				gpsdata.measurements[i].multipath_indicator = mtk_gps_measurement[i].MultipathIndicater;
-				gpsdata.measurements[i].pseudorange_m = mtk_gps_measurement[i].PRInMeters;
-				gpsdata.measurements[i].prn = mtk_gps_measurement[i].PRN;
-				gpsdata.measurements[i].pseudorange_rate_mps = mtk_gps_measurement[i].PRRateInMeterPreSec;
-				gpsdata.measurements[i].pseudorange_rate_uncertainty_mps = mtk_gps_measurement[i].PRRateUnInMeterPreSec;
-				gpsdata.measurements[i].pseudorange_uncertainty_m = mtk_gps_measurement[i].PRUnInMeters;
-				gpsdata.measurements[i].received_gps_tow_ns = mtk_gps_measurement[i].ReGpsTowInNs;
-				gpsdata.measurements[i].received_gps_tow_uncertainty_ns = mtk_gps_measurement[i].ReGpsTowUnInNs;
-				gpsdata.measurements[i].snr_db = mtk_gps_measurement[i].SnrInDb;
-				gpsdata.measurements[i].state = mtk_gps_measurement[i].state;
-				gpsdata.measurements[i].time_from_last_bit_ms = mtk_gps_measurement[i].TimeFromLastBitInMs;
-				gpsdata.measurements[i].time_offset_ns = mtk_gps_measurement[i].TimeOffsetInNs;
-				gpsdata.measurements[i].used_in_fix = mtk_gps_measurement[i].UsedInFix;
-				if(gpsdata.measurements[i].prn != 0)
-				{
-					gpsdata.measurement_count++;
-				}
-			}
-			memcpy(&gpsdata.clock ,&gpsclock,sizeof(gpsclock));
+	        DBG("HAL_CMD_MEASUREMENT message recieved,gpsmeasurement_init_flag =1 \n");
+			measurement_callbacks.measurement_callback(&gpsdata);
 			
-		#if 0				
-				DBG("clock.size = %d, clock.bias_ns = %lf, clock.bias_uncertainty_ns = %lf, clock.drift_nsps = %lf,clock.flags = %d,\
-					clock.leap_second = %d,clock.time_ns = %d, clock.time_uncertainty_ns = %lf, clock.type = %d, clock.full_bias_ns = %d, clock.drift_uncertainty_nsps = %lf",
-					gpsdata.clock.size, gpsdata.clock.bias_ns,gpsdata.clock.bias_uncertainty_ns,gpsdata.clock.drift_nsps,gpsdata.clock.flags,
-					gpsdata.clock.leap_second, gpsdata.clock.time_ns, gpsdata.clock.time_uncertainty_ns, gpsdata.clock.type,gpsdata.clock.full_bias_ns, gpsdata.clock.drift_uncertainty_nsps);
-		
-				for(i = 0;i < 32;i++)
-				{
-					if(gpsdata.measurements[i].size > 0){				
-						DBG("i = %d,measurements.CFInhZ = %f, measurements.Cn0InDbHz = %lf, measurements.size = %d, measurements.prn = %d, measurements.time_offset_ns = %lf,  measurements.used_in_fix = %d",
-							i,gpsdata.measurements[i].carrier_frequency_hz,gpsdata.measurements[i].c_n0_dbhz,gpsdata.measurements[i].size, gpsdata.measurements[i].prn, gpsdata.measurements[i].time_offset_ns,gpsdata.measurements[i].used_in_fix);
-					}
-				}
-		#endif
-
-				DBG("if measurement_count = %d > 0 ,Send measurement_callback data to FWK",gpsdata.measurement_count);
-				if(gpsdata.measurement_count > 0)
-				{				
-					measurement_callbacks.measurement_callback(&gpsdata);	
-					DBG("Send measurement_callback data to FWK success\n");			
-				}
 			}
 			break;			
 		}
 		case HAL_CMD_NAVIGATION:{
-			DBG("HAL_CMD_NAVIGATION message recieved1\n");
+			DBG("HAL_CMD_NAVIGATION message recieved\n");
 			if(gpsnavigation_init_flag == 1){
-				int i;
-				MTK_GPS_NAVIGATION_EVENT *gps_navigation_event = (MTK_GPS_NAVIGATION_EVENT*)malloc(sizeof(MTK_GPS_NAVIGATION_EVENT));
-				if(gps_navigation_event == NULL)
-				{
-					DBG("point gps_navigation_event is null,return!");
-					break;
-				}
-				buff_get_struct(gps_navigation_event, sizeof(MTK_GPS_NAVIGATION_EVENT), buff, &offset);
-				
 				GpsNavigationMessage gpsnavigation;
 	            memset(&gpsnavigation, 0, sizeof(GpsNavigationMessage));     
-				gpsnavigation.size = sizeof(GpsNavigationMessage);
-				gpsnavigation.prn = gps_navigation_event->prn;
-				gpsnavigation.type = gps_navigation_event->type;
-				gpsnavigation.message_id = gps_navigation_event->messageID;
-				gpsnavigation.submessage_id = gps_navigation_event->submessageID;
-				gpsnavigation.data_length = (size_t)gps_navigation_event->length;
-				gpsnavigation.data = (char*)malloc(sizeof(char)*gps_navigation_event->length);
-				memcpy(gpsnavigation.data,gps_navigation_event->data,gps_navigation_event->length);
-	            
-	#if 0
-				DBG("size_t = %d,gpsnavigation.size = %d,%p, gpsnavigation.prn = %d,%p, gpsnavigation.type = %d,%p, gpsnavigation.message_id = %d,%p,\
-					gpsnavigation.submessage_id = %d,%p, gpsnavigation.data_length = %d,%p,data = %p",sizeof(size_t),
-					gpsnavigation.size,&gpsnavigation.size, gpsnavigation.prn, &gpsnavigation.prn, gpsnavigation.type, &gpsnavigation.type,
-					gpsnavigation.message_id, &gpsnavigation.message_id,gpsnavigation.submessage_id, &gpsnavigation.submessage_id, gpsnavigation.data_length, &gpsnavigation.data_length,gpsnavigation.data);
-				for(i = 0;i < 40;i++)
-				{
-					DBG("HAL: gpsnavigation.data[%d] = %x",i, gpsnavigation.data[i]);		
-				}
-	#endif
+				
+	            buff_get_struct(&gpsnavigation, sizeof(GpsNavigationMessage), buff, &offset);
+				DBG("HAL_CMD_NAVIGATION message recieved,gpsnavigation_init_flag =1 \n");
 				navigation_callbacks.navigation_message_callback(&gpsnavigation);
-				DBG("navigation_message_callback done\n");
-				free(gpsnavigation.data);
-				free(gps_navigation_event);
 			}
 			break;
 		}
@@ -4094,8 +3763,8 @@ mtk_gps_init(GpsCallbacks* callbacks)
     }
     DBG("get chip id is:%s\n",chip_id);
 	if(strcmp(chip_id, "0x6572") == 0 || strcmp(chip_id, "0x6582") == 0 ||
-		strcmp(chip_id, "0x6580") == 0 || strcmp(chip_id, "0x6592") == 0 || strcmp(chip_id, "0x6571") == 0 ||
-		strcmp(chip_id, "0x8127") == 0 || strcmp(chip_id, "0x0335") == 0 ||strcmp(chip_id, "0x8163") == 0)
+		strcmp(chip_id, "0x6592") == 0 || strcmp(chip_id, "0x6571") == 0 ||
+		strcmp(chip_id, "0x8127") == 0 || strcmp(chip_id, "0x0335") == 0)
 	{
 		gps_epo_type = 1; //GPS only
 	}
@@ -4149,30 +3818,21 @@ mtk_gps_cleanup(void)
 }
 #if EPO_SUPPORT
 int
-mtk_epo_is_expired(int wifi_tragger){
+mtk_epo_is_expired(){
     long long uTime[3];
 	memset(uTime, 0, sizeof(uTime));
-//    time_t time_st;
-    time_t		   now = time(NULL);
-    struct tm	   tm_utc;
-    unsigned long  time_utc;
+    time_t time_st;	    	
     long long etime = gps_epo_period*24*60*60;
     long long expired_set = 0;
 	int download_day = 0;
 	
-//    time(&time_st);
-    gmtime_r( &now, &tm_utc );
-    time_utc = mktime(&tm_utc);
+    time(&time_st);
     mtk_gps_epo_file_time_hal(uTime);
 
-	if(wifi_tragger)
-    {
-        expired_set = wifi_epo_period*24*60*60; //for wifi tragger we change checking expired time to 1 day.
-    }   
-    else if((uTime[2] - uTime[0]) < etime)
+	if((uTime[2] - uTime[0]) < etime)
 	{
 		download_day = (uTime[2] - uTime[0])/(24*60*60);
-		//DBG("epo data downloaded dat: %d\n", download_day);
+		DBG("epo data downloaded dat: %d\n", download_day);
 		if(download_day < 3)
 		{
 			expired_set = 0;
@@ -4207,10 +3867,10 @@ mtk_epo_is_expired(int wifi_tragger){
 		expired_set = etime;
 	}
 	
-    DBG("current time: %ld, current time:%s", time_utc, ctime(&time_utc));
-    DBG("EPO start time: %lld, EPO start time: %s", uTime[0], ctime(&uTime[0]));
+    DBG("current time: %ld, current time:%s", time_st, ctime(&time_st));
+   // DBG("EPO start time: %lld, EPO start time: %s", uTime[0], ctime(&uTime[0]));
    // DBG("EPO expired_set: %lld", expired_set);
-    if ((time_utc - uTime[0]) >= expired_set){
+    if ((time_st - uTime[0]) >= expired_set){
         DBG("EPO file is expired");
 		gps_epo_file_count = 0;
         return 1;
@@ -4263,7 +3923,7 @@ mtk_gps_start()
 	        else
 	        {
 	            //check if EPO.DAT is expired
-            if(mtk_epo_is_expired(0))
+	            if(mtk_epo_is_expired())
 	            {
 	                DBG("EPOHAL.DAT is not existed and EPO.DAT expired, download request 2");
 	                gps_download_epo(s);
@@ -4275,7 +3935,7 @@ mtk_gps_start()
 	    	if(((nw_type == nw_data)&&(nw_connected == 1)&&epo_download_failed)||((nw_connected == 0)&&epo_download_failed)|| (epo_download_failed == 0))
 	    	{
 		        //to check if EPOHAL.DAT is expired.
-        if (mtk_epo_is_expired(0))
+		        if (mtk_epo_is_expired())
 		        {
 		            DBG("EPOHAL is expired, download request 3");
 					unlink(EPO_FILE_HAL);
@@ -4329,10 +3989,6 @@ mtk_gps_start()
     callback_backup.status_cb(&sta);
     
     callback_backup.acquire_wakelock_cb();//avoid cpu to sleep
-	if(lock_for_sync[M_STOP].condtion == 1)
-	{
-		lock_for_sync[M_STOP].condtion = 0; //make sure gps_stop has set state to GPS_STATUS_ENGINE_OFF in next time
-	}
     s->start_flag = 1;
 	DBG("s->start_flag = 1\n");
     return 0;
@@ -4490,62 +4146,13 @@ mtk_gps_stop()
 static int
 mtk_gps_inject_time(GpsUtcTime time, int64_t timeReference, int uncertainty)
 {
-    ntp_context inject_ntp;
-    long long time_s = 0;
-    char buff[1024] = {0};
-    int offset = 0;
-
     TRC();
-    time_s = time/1000;
-    DBG("inject time= %lld,ctime = %s, timeReference = %lld,uncertainty =%d\n", time,ctime(&time_s), timeReference,uncertainty);
-    memcpy(&(inject_ntp.time),&time,sizeof(GpsUtcTime));
-    inject_ntp.timeReference = timeReference;
-    inject_ntp.uncertainty = uncertainty;
-
-    buff_put_int(MNL_CMD_GPS_INJECT_TIME, buff, &offset);
-    buff_put_struct(&inject_ntp, sizeof(ntp_context), buff, &offset);	
-    if(g_agps_ctx.send_fd >= 0)
-    {
-        int res = mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
-    }
-    else
-    {
-        ERR("g_agps_ctx.send_fd is not initialized\n");
-    }
     return 0;
 }
 
 static int
 mtk_gps_inject_location(double latitude, double longitude, float accuracy)
 {
-    nlp_context nlp_location;
-    char buff[1024] = {0};
-    int offset = 0;
-
-    if(clock_gettime(CLOCK_MONOTONIC , &nlp_location.ts) == -1)
-    {
-        ERR("clock_gettime failed reason=[%s]\n",strerror(errno));
-        return -1;
-    }
-    DBG("ts.tv_sec= %lld,ts.tv_nsec = %lld\n", nlp_location.ts.tv_sec,nlp_location.ts.tv_nsec);
-    DBG("inject location lati= %f, longi = %f,accuracy =%f\n", latitude, longitude,accuracy);
-    
-    nlp_location.latitude = latitude;
-    nlp_location.longitude = longitude;
-    nlp_location.accuracy = accuracy;
-    nlp_location.type= 0;
-    nlp_location.started = started;  
-    mtk_gps_update_location(&nlp_location);
-    buff_put_int(MNL_CMD_GPS_INJECT_LOCATION, buff, &offset);
-    buff_put_struct(&nlp_location, sizeof(nlp_context), buff, &offset);
-    if(g_agps_ctx.send_fd >= 0)
-    {
-        int res = mtk_daemon_send(g_agps_ctx.send_fd, MTK_HAL2MNLD, buff, sizeof(buff));
-    }
-    else
-    {
-        ERR("g_agps_ctx.send_fd is not initialized\n");
-    }
     return 0;
 }
 
@@ -4630,11 +4237,10 @@ static int set_retry_alarm_handler(int timeout)
 	if(retry_timer.fd == C_INVALID_TIMER)
 	{
 		memset(&retry_timer.evt, 0x00, sizeof(retry_timer.evt));
-        retry_timer.evt.sigev_value.sival_ptr = &retry_timer.fd;
 		retry_timer.evt.sigev_value.sival_int = timeout;
 		retry_timer.evt.sigev_notify = SIGEV_THREAD;
 		retry_timer.evt.sigev_notify_function = retry_alarm_handler;
-		if ((err = timer_create(CLOCK_REALTIME, &retry_timer.evt, &retry_timer.fd)))
+		if ((err = timer_create(CLOCK_PROCESS_CPUTIME_ID, &retry_timer.evt, &retry_timer.fd)))
 		{
 			DBG("timer_create = %d(%s)\n", errno, strerror(errno));
 			return -1;
@@ -4655,10 +4261,9 @@ static int set_retry_alarm_handler(int timeout)
 static void *thread_epo_file_update(void* arg){
 
     GpsState* s = (GpsState *)arg;
-    int schedule_delay = 100;
     DBG("EPO thread start");
     while(1){
-        usleep(schedule_delay*1000);
+        usleep(100*1000);
         if (s->thread_epo_exit_flag == 1){
             DBG("EPO thread exit\n");
             break;
@@ -4682,10 +4287,7 @@ static void *thread_epo_file_update(void* arg){
 			if( nw_connected && epo_download_failed && epo_download_retry) //if download has failed last time,we should complete downloading.
 			{
 				long long uTime[3] ={0};
-//				time_t time_st;
-                time_t		   now = time(NULL);
-                struct tm	   tm_utc;
-                unsigned long  time_utc;				
+				time_t time_st;
 				int file_count_temp = 0;
 				static int file_retrying = 50;//50 for first restore
 				static int retry_time = 0;
@@ -4696,11 +4298,9 @@ static void *thread_epo_file_update(void* arg){
 				}
 				file_count_temp = gps_epo_file_count;
 				DBG("EPO data download resume...file_count_temp=%d\n",file_count_temp);
-				//time(&time_st);//
-				gmtime_r( &now, &tm_utc );
-				time_utc = mktime(&tm_utc);
+				time(&time_st);//
 				mtk_gps_epo_file_time_hal(uTime);
-				if((time_utc - uTime[0]) >= (24*60*60))//if epo date is expired > 1 day,we should begin with first file.
+				if((time_st - uTime[0]) >= (24*60*60))//if epo date is expired > 1 day,we should begin with first file.
 				{
 					epo_download_failed = 0;
 					gps_epo_file_count = 0;
@@ -4746,7 +4346,7 @@ static void *thread_epo_file_update(void* arg){
 		{
 			if((epo_download_failed == 0) && nw_connected && (nw_type == nw_wifi))
 			{
-				if (mtk_epo_is_expired(1))
+				if (mtk_epo_is_expired())
 				{
 				        DBG("EPO data download wifi tragger...");
 						gps_download_epo(s);
@@ -4754,14 +4354,6 @@ static void *thread_epo_file_update(void* arg){
 				}
 			}
 		}
-        if((s->epo_data_updated == 0) && (epo_download_failed == 0))
-        {
-            schedule_delay = 2000;
-        }
-        else
-        {
-            schedule_delay = 100;
-        }
     }
     //pthread_exit(NULL);
     release_condition(&lock_for_sync[M_THREAD_EXIT]);
@@ -4909,12 +4501,12 @@ mtk_gps_get_extension(const char* name)
     if(strncmp(name, "supl-certificate", strlen(name)) == 0) {
        return &mtkSuplCertificateInterface;
     }
-    if(strncmp(name, GPS_MEASUREMENT_INTERFACE, strlen(name)) == 0) {
-       return &mtkGpsMeasurementInterface;
-    }
-    if(strncmp(name, GPS_NAVIGATION_MESSAGE_INTERFACE, strlen(name)) == 0) {
-       return &mtkGpsNavigationMessageInterface;
-    }
+    //if(strncmp(name, GPS_MEASUREMENT_INTERFACE, strlen(name)) == 0) {
+    //   return &mtkGpsMeasurementInterface;
+    //}
+    //if(strncmp(name, GPS_NAVIGATION_MESSAGE_INTERFACE, strlen(name)) == 0) {
+    //   return &mtkGpsNavigationMessageInterface;
+    //}
     return NULL;
 }
 #if EPO_SUPPORT
@@ -4967,12 +4559,12 @@ mtk_gps_sys_get_file_size() {
 	}
 	if(res_epo_hal == 0) /*EPOHAL.DAT is here*/
 	{
-		//DBG("find EPOHAL.DAT here\n");
+		DBG("find EPOHAL.DAT here\n");
 		strcpy(epofile, epo_file_hal);
 	}
 	else if(res_epo == 0) /*EPO.DAT is here*/
 	{
-		//DBG("find EPO.DAT here\n");
+		DBG("find EPO.DAT here\n");
 		strcpy(epofile, epo_file);
 	}
 	else
@@ -4983,7 +4575,7 @@ mtk_gps_sys_get_file_size() {
     	}
 	
     fileSize = st.st_size;	
-    //DBG("EPO file size: %d\n", fileSize);
+    DBG("EPO file size: %d\n", fileSize);
     return fileSize;
        	
     //fseek(pFile, 0L, SEEK_END); //reset the current pointer to the end of file
@@ -5108,8 +4700,8 @@ void GpsToUtcTime(int i2Wn, double dfTow, time_t* uSecond)
     target_time.tm_min = pi2Min;
     target_time.tm_sec = pdfSec;
     target_time.tm_isdst = -1;
-//    DBG("target_time.tm_year = %d, month = %d, day = %d, hour = %d, min = %d, sec = %d, tm_isdst = %d\n", 
-//        target_time.tm_year, target_time.tm_mon, target_time.tm_mday, target_time.tm_hour, target_time.tm_min, target_time.tm_sec, target_time.tm_isdst);
+    DBG("target_time.tm_year = %d, month = %d, day = %d, hour = %d, min = %d, sec = %d, tm_isdst = %d\n", 
+        target_time.tm_year, target_time.tm_mon, target_time.tm_mday, target_time.tm_hour, target_time.tm_min, target_time.tm_sec, target_time.tm_isdst);
     *uSecond = mktime(&target_time);
     if (*uSecond < 0){
 		ERR("Convert UTC time to seconds fail, return\n");
@@ -5134,8 +4726,8 @@ mtk_gps_sys_epo_period_start(int fd, unsigned int* u4GpsSecs, time_t* uSecond){ 
     pi2WeekNo = (*u4GpsSecs) / 604800;
     pu4Tow = (*u4GpsSecs) % 604800;
     
-    //TRC();
-    //DBG("pi2WeekNo = %d, pu4Tow = %d\n", pi2WeekNo, pu4Tow);
+    TRC();
+    DBG("pi2WeekNo = %d, pu4Tow = %d\n", pi2WeekNo, pu4Tow);
     GpsToUtcTime(pi2WeekNo, pu4Tow, uSecond);//to get UTC second	
     return 0;	
 }
@@ -5165,8 +4757,8 @@ mtk_gps_sys_epo_period_end(int fd, unsigned int *u4GpsSecs, time_t* uSecond) {  
     pi2WeekNo = (*u4GpsSecs) / 604800;
     pu4Tow = (*u4GpsSecs) % 604800;
     
-    //TRC();
-    //DBG("pi2WeekNo = %d, pu4Tow = %d\n", pi2WeekNo, pu4Tow);
+    TRC();
+    DBG("pi2WeekNo = %d, pu4Tow = %d\n", pi2WeekNo, pu4Tow);
     GpsToUtcTime(pi2WeekNo, pu4Tow, uSecond);		
 
     return 0;	 
@@ -5200,12 +4792,12 @@ mtk_gps_epo_file_time_hal(long long uTime[]) {
 	}
 	if( res_epo_hal== 0) /*EPOHAL.DAT is here*/
 	{
-		//DBG("find EPOHAL.DAT here\n");
+		DBG("find EPOHAL.DAT here\n");
 		strcpy(epofile, epo_file_hal);
 	}
 	else if(res_epo == 0) /*EPO.DAT is here*/
 	{
-		//DBG("find EPO.DAT here\n");
+		DBG("find EPO.DAT here\n");
 		strcpy(epofile, epo_file);
 	}
 	else
@@ -5235,16 +4827,16 @@ mtk_gps_epo_file_time_hal(long long uTime[]) {
         return -1;                                                                                  
     }else{
         uTime[0] = (long long)uSecond_start;   	    
-       // DBG("The Start time of EPO file is %lld", uTime[0]);
-       // DBG("The start time of EPO file is %s", ctime(&uTime[0]));
+        DBG("The Start time of EPO file is %lld", uTime[0]);
+        DBG("The start time of EPO file is %s", ctime(&uTime[0]));
     }
 			   
     //download time	
     stat(epofile, &filestat);
     uTime[1] = (long long)(filestat.st_mtime);
     //uTime[1] = uTime[1] - 8 * 3600;    
-    //DBG("Download time of EPO file is %lld", uTime[1]);
-    //DBG("Download time of EPO file is %s\n", ctime(&uTime[1]));		
+    DBG("Download time of EPO file is %lld", uTime[1]);
+    DBG("Download time of EPO file is %s\n", ctime(&uTime[1]));		
     
     //EPO file expire time    
     if(mtk_gps_sys_epo_period_end(fd, &u4GpsSecs_expire, &uSecond_expire)){
@@ -5254,8 +4846,8 @@ mtk_gps_epo_file_time_hal(long long uTime[]) {
         return -1;
     }else {
         uTime[2] = (long long)uSecond_expire;
-        //DBG("The expire time of EPO file is %lld", uTime[2]);
-       // DBG("The expire time of EPO file is %s", ctime(&uTime[2]));
+        DBG("The expire time of EPO file is %lld", uTime[2]);
+        DBG("The expire time of EPO file is %s", ctime(&uTime[2]));
     }
 
     close(fd);
@@ -5570,7 +5162,6 @@ int mtk_gps_epo_server_data_is_changed()
     time_t uSecond_end;
     unsigned int u4GpsSecs_start;
     unsigned int u4GpsSecs_end;
-    int ret = 0;
 
     strcat(gps_epo_data_file_name_start,"/data/misc/");
     strcat(gps_epo_data_file_name_start,gps_epo_file_name);
@@ -5578,18 +5169,8 @@ int mtk_gps_epo_server_data_is_changed()
     fd_start = open(gps_epo_data_file_name_start, O_RDONLY);
     if(fd_start >= 0 )
     {
-        int res = 0;
-        res = mtk_gps_epo_piece_data_start(fd_start,&u4GpsSecs_start,&uSecond_start);
-        if(res == 0)
-        {
-            uTime_start = (long long)uSecond_start;
-        }
-        else
-        {
-            epo_download_failed = 1;
-            ret = 1;
-            ERR("Get start time failed\n");
-        }
+        mtk_gps_epo_piece_data_start(fd_start,&u4GpsSecs_start,&uSecond_start);
+        uTime_start = (long long)uSecond_start;
         close(fd_start);
     }
     else
@@ -5605,18 +5186,8 @@ int mtk_gps_epo_server_data_is_changed()
         fd_end = open(gps_epo_data_file_name_end, O_RDONLY);
         if(fd_end >= 0)
         {
-            int res = 0;
-            res = mtk_gps_epo_piece_data_end(fd_end,&u4GpsSecs_end,&uSecond_end);
-            if(res == 0)
-            {
-                uTime_end = (long long)uSecond_end;
-            }
-            else
-            {
-                epo_download_failed = 1;
-                ERR("Get end time failed\n");
-                ret = 1;
-            }
+            mtk_gps_epo_piece_data_end(fd_end,&u4GpsSecs_end,&uSecond_end);
+            uTime_end = (long long)uSecond_end;
             close(fd_end);
         }
         else
@@ -5649,7 +5220,7 @@ int mtk_gps_epo_server_data_is_changed()
         gps_epo_file_count = 0;
         return 1;
     }
-    return ret;
+    return 0;
 }
 
 int mtk_gps_epo_file_update(){

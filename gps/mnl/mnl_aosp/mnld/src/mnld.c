@@ -1924,7 +1924,7 @@ mtk_gps_sys_gps_mnl_callback (MTK_GPS_NOTIFICATION_TYPE msg)
 						{
 							int fd_fmdev = -1;
 							int ret = 0;
-							//struct fm_gps_rtc_info rtcInfo;
+							struct fm_gps_rtc_info rtcInfo;
 							fd_fmdev = open("dev/fm", O_RDWR);
 							if(fd_fmdev < 0)
 							{
@@ -1932,14 +1932,14 @@ mtk_gps_sys_gps_mnl_callback (MTK_GPS_NOTIFICATION_TYPE msg)
 							}
 							else
 							{
-								//rtcInfo.retryCnt = 2;
-								//rtcInfo.ageThd = mnl_config.AVAILIABLE_AGE;
-								//rtcInfo.driftThd = mnl_config.RTC_DRIFT;
-								//rtcInfo.tvThd.tv_sec = mnl_config.TIME_INTERVAL;
-								//rtcInfo.age = dfAge;
-								//rtcInfo.drift = dfRtcD;
-								//rtcInfo.tv.tv_sec = current_time;
-								//ret = ioctl(fd_fmdev, FM_IOCTL_GPS_RTC_DRIFT, &rtcInfo);
+								rtcInfo.retryCnt = 2;
+								rtcInfo.ageThd = mnl_config.AVAILIABLE_AGE;
+								rtcInfo.driftThd = mnl_config.RTC_DRIFT;
+								rtcInfo.tvThd.tv_sec = mnl_config.TIME_INTERVAL;
+								rtcInfo.age = dfAge;
+								rtcInfo.drift = dfRtcD;
+								rtcInfo.tv.tv_sec = current_time;
+								ret = ioctl(fd_fmdev, FM_IOCTL_GPS_RTC_DRIFT, &rtcInfo);
 								if(ret)
 								{
 									MND_MSG("send rtc info failed, [ret=%d]\n", ret);
